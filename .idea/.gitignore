@@ -8,3 +8,6 @@
 /dataSources.local.xml
 
 fauna.env
+/go-fauna-test-app.iml
+/modules.xml
+/vcs.xml
