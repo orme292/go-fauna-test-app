@@ -68,19 +68,111 @@ func getDbClient() (dbClient *f.FaunaClient) {
 func createCollection(collectionName string, dbClient *f.FaunaClient) {
 
 	res, err := dbClient.Query(
-		f.CreateCollection(f.Obj{
-			"name": collectionName,
-		}))
+		f.If(
+			f.Exists(f.Collection(collectionName)),
+			true,
+			f.CreateCollection(f.Obj{"name": collectionName}),
+		),
+	)
 
 	if err != nil {
 		panic(err)
 	}
 
-	log.Printf("Created Collection: %s\n%s", collectionName, res)
+	if res != f.BooleanV(true) {
+		log.Printf("Created Collection: %s\n%s", collectionName, res)
+	} else {
+		log.Printf("Collection: %s, Already Exists\n%s", collectionName, res)
+	}
 }
+
+func createInstance(dbClient *f.FaunaClient, collectionName string, id int, name string) {
+	var res f.Value
+	var err error
+
+	var ref f.RefV
+
+	res, err = dbClient.Query(
+		f.Create(f.Collection(collectionName), f.Obj{
+			"data": f.Obj{
+				"id":   id,
+				"name": name,
+			}}),
+	)
+
+	if err != nil {
+		log.Printf("Instance Existed '%s' : %v : %s", collectionName, id, res)
+	}
+
+	if err = res.At(f.ObjKey("ref")).Get(&ref); err == nil {
+		log.Printf("created '%s': %v \n%s", collectionName, id, res)
+	} else {
+		panic(err)
+	}
+
+	res, err = dbClient.Query(f.Select(f.Arr{"data", "name"}, f.Get(ref)))
+
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("Read '%s': %v \n%s", collectionName, id, res)
+}
+
+func createIndex(dbClient *f.FaunaClient, indexName string, collectionName string, primaryKey string) {
+	res, err := dbClient.Query(
+		f.If(
+			f.Exists(f.Index(indexName)),
+			true,
+			f.CreateIndex(f.Obj{
+				"name":   indexName,
+				"source": f.Collection(collectionName),
+				"unique": true,
+				"terms":  f.Obj{"field": f.Arr{"data", primaryKey}},
+			})))
+
+	if err != nil {
+		panic(err)
+	}
+
+	if res != f.BooleanV(true) {
+		log.Printf("Created Index: %s\n %s", indexName, res)
+	} else {
+		log.Printf("Index: %s, Already Exists\n %s", indexName, res)
+	}
+}
+
+func getInstanceByPrimaryKey(dbClient *f.FaunaClient, indexName string, primaryKey int) {
+
+	res, err := dbClient.Query(
+		f.Select(f.Arr{"data", "name"},
+			f.Get(f.MatchTerm(f.Index(indexName), primaryKey))))
+
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("Read by Primary Key %s: %v : %s", indexName, primaryKey, res)
+}
+
 func main() {
 	log.Printf("Environment Variable FAUNASECRET: %s\n", secret)
 	createDatabase()
+
 	dbClient := getDbClient()
-	createCollection("SampleCollection", dbClient)
+
+	collectionName := "Customers"
+	createCollection(collectionName, dbClient)
+
+	indexName := "customer_by_id"
+	primaryKey := "id"
+	createIndex(dbClient, indexName, collectionName, primaryKey)
+
+	createInstance(dbClient, collectionName, 1, "Adam Smith")
+	createInstance(dbClient, collectionName, 2, "David Ricardo")
+	createInstance(dbClient, collectionName, 3, "John Maynard Keynes")
+	createInstance(dbClient, collectionName, 4, "Frederick Hayek")
+
+	getInstanceByPrimaryKey(dbClient, indexName, 1)
+	getInstanceByPrimaryKey(dbClient, indexName, 2)
+	getInstanceByPrimaryKey(dbClient, indexName, 3)
+	getInstanceByPrimaryKey(dbClient, indexName, 4)
 }
