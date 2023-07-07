@@ -19,8 +19,8 @@ type Client struct {
 	SpecSecret string
 }
 
-func (c Connection) GetAdmin() (client *f.FaunaClient) {
-	return f.NewFaunaClient(c.Secret, f.Endpoint(c.Endpoint))
+func (c Client) GetAdmin() (client *f.FaunaClient) {
+	return f.NewFaunaClient(c.Connection.Secret, f.Endpoint(c.Connection.Endpoint))
 }
 
 func (c Client) GetDb() (dbclient *f.FaunaClient) {
@@ -100,4 +100,70 @@ func (c Client) CreateCollection(collection Collection) (bool, error) {
 	}
 	log.Printf("Collection: %s, Already Exists\n%s", collection.Name, result)
 	return false, err
+}
+
+type Index struct {
+	Name       string
+	PrimaryKey string
+	Collection Collection
+}
+
+func (c Client) CreateIndex(index Index) (bool, error) {
+	result, err := c.Db.Query(
+		f.If(
+			f.Exists(f.Index(index.Name)),
+			true,
+			f.CreateIndex(f.Obj{
+				"name":   index.Name,
+				"source": f.Collection(index.Collection.Name),
+				"unique": true,
+				"terms": f.Obj{
+					"field": f.Arr{"data", index.PrimaryKey},
+				},
+			}),
+		),
+	)
+
+	if err != nil {
+		panic(err)
+	}
+
+	if result != f.BooleanV(true) {
+		log.Printf("Created Index: %s\n %s", index.Name, result)
+		return true, err
+	}
+	log.Printf("Index: %s, Already Exists\n %s", index.Name, result)
+	return false, err
+}
+
+type Instance struct {
+	Collection Collection
+	Data       f.Obj
+	Ref        *f.RefV
+}
+
+func (c Client) CreateInstance(instance Instance) (bool, error) {
+	ref := new(f.RefV)
+	result, err := c.Db.Query(
+		f.Create(f.Collection(instance.Collection.Name), f.Obj{
+			"data": instance.Data,
+		}),
+	)
+	if err != nil {
+		log.Printf("Instance Existed '%s' : %s", instance.Collection.Name, result)
+		return true, err
+	}
+
+	if err = result.At(f.ObjKey("ref")).Get(&ref); err == nil {
+		log.Printf("created '%s'\n%v", instance.Collection.Name, result)
+	} else {
+		panic(err)
+	}
+
+	result, err = c.Db.Query(f.Select(f.Arr{"data", "name"}, f.Get(ref)))
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("Read '%s'\n%s", instance.Collection.Name, result)
+	return true, err
 }

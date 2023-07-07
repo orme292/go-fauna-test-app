@@ -25,13 +25,15 @@ func main() {
 
 	client := fdata.Client{
 		Connection: connection,
-		Admin:      connection.GetAdmin(),
 	}
+
+	client.Admin = client.GetAdmin()
 
 	result, err := client.CreateDb()
 	if result != true && err != nil {
-		log.Printf("client.CreateDb() failed with result:%s\n%s", result, err)
+		log.Printf("client.CreateDb() failed with result:%v\n%s", result, err)
 	}
+
 	client.Db = client.GetDb()
 
 	userCollection := fdata.Collection{
@@ -46,7 +48,44 @@ func main() {
 
 	result, err = client.CreateCollection(userCollection)
 	if result != true && err != nil {
-		log.Printf("client.CreateCollection failed with results: %s\n%s", result, err)
+		log.Printf("client.CreateCollection failed with results: %v\n%s", result, err)
+	}
+
+	userIndex := fdata.Index{
+		Name:       "user_by_id",
+		PrimaryKey: "id",
+		Collection: userCollection,
+	}
+	result, err = client.CreateIndex(userIndex)
+	if result != true && err != nil {
+		log.Printf("client.CreateIndex failed with results: %v\n%s", result, err)
+	}
+
+	userInstanceA := fdata.Instance{
+		Collection: userCollection,
+		Data: f.Obj{
+			"id":   1,
+			"name": "Andrew",
+			"age":  99,
+		},
+	}
+	result, err = client.CreateInstance(userInstanceA)
+	if result != true && err != nil {
+		log.Printf("client.CreateInstance failed with results: %v\n%s", result, err)
+	}
+	log.Printf("Done userInstanceA")
+
+	userInstanceB := fdata.Instance{
+		Collection: userCollection,
+		Data: f.Obj{
+			"id":   2,
+			"name": "James",
+			"age":  1,
+		},
+	}
+	result, err = client.CreateInstance(userInstanceB)
+	if result != true && err != nil {
+		log.Printf("client.CreateInstance failed with results: %v\n%s", result, err)
 	}
 }
 
