@@ -1,14 +1,15 @@
 package main
 
+// This is built from the Getting Started docs for Fauna's Go Driver
+
 import (
 	"log"
-	"os"
 
 	f "github.com/fauna/faunadb-go/v4/faunadb"
 )
 
 var (
-	secret   = os.Getenv("FAUNASECRET")
+	secret   = "get-from-main-yaml"
 	endpoint = f.Endpoint("https://db.fauna.com")
 
 	adminClient = f.NewFaunaClient(secret, endpoint)
